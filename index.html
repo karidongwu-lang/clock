@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Color wheel clock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #f6f7fb;
+    --ink: #2a2c34;
+    --ink-soft: #6f7382;
+    --hand: rgba(70, 74, 92, 0.42);
+    --glass: rgba(255, 255, 255, 0.34);
+    --glass-edge: rgba(255, 255, 255, 0.75);
+    --glass-sheen: rgba(255, 255, 255, 0.6);
+    --pressed: rgba(255, 255, 255, 0.75);
+    --line: rgba(255, 255, 255, 0.6);
+    --shadow: rgba(70, 70, 110, 0.22);
+    --blob-opacity: 0.85;
+    --c1: #e6f5d3; --c2: #f7eef6; --c3: #efe6fa; --c4: #e3e8fb; --c5: #fbe3e6;
+    font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121319; --ink: #eef0f5; --ink-soft: #9ea2b0;
+      --hand: rgba(235, 238, 250, 0.5);
+      --glass: rgba(255, 255, 255, 0.08); --glass-edge: rgba(255, 255, 255, 0.28);
+      --glass-sheen: rgba(255, 255, 255, 0.18); --pressed: rgba(255, 255, 255, 0.16);
+      --line: rgba(255, 255, 255, 0.16); --shadow: rgba(0, 0, 0, 0.5);
+      --blob-opacity: 0.35;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121319; --ink: #eef0f5; --ink-soft: #9ea2b0;
+    --hand: rgba(235, 238, 250, 0.5);
+    --glass: rgba(255, 255, 255, 0.08); --glass-edge: rgba(255, 255, 255, 0.28);
+    --glass-sheen: rgba(255, 255, 255, 0.18); --pressed: rgba(255, 255, 255, 0.16);
+    --line: rgba(255, 255, 255, 0.16); --shadow: rgba(0, 0, 0, 0.5);
+    --blob-opacity: 0.35;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body { margin: 0; min-height: 100%; background: var(--bg); overflow-x: hidden; }
+
+  /* soft pastel wash behind everything, fed by the current palette */
+  .wash {
+    position: fixed; inset: -10%; z-index: 0; pointer-events: none;
+    opacity: var(--blob-opacity);
+    background:
+      radial-gradient(40% 35% at 18% 20%, var(--c1), transparent 70%),
+      radial-gradient(38% 38% at 85% 18%, var(--c4), transparent 70%),
+      radial-gradient(45% 40% at 80% 85%, var(--c5), transparent 70%),
+      radial-gradient(40% 40% at 15% 85%, var(--c3), transparent 70%),
+      radial-gradient(35% 30% at 50% 50%, var(--c2), transparent 75%);
+    filter: blur(30px);
+  }
+
+  main {
+    position: relative; z-index: 1;
+    max-width: 640px; margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .clock { position: relative; width: min(80vw, 500px); aspect-ratio: 1; margin: 3rem 0 2.5rem; }
+  .halo, .disc, .glass, .center { position: absolute; border-radius: 50%; }
+  .halo { inset: -4%; filter: blur(48px) saturate(1.2); opacity: 0.9; }
+  .disc { inset: 0; }
+  .glass {
+    inset: 0;
+    background:
+      radial-gradient(120% 90% at 28% 12%, var(--glass-sheen), transparent 45%),
+      var(--glass);
+    -webkit-backdrop-filter: blur(26px) saturate(1.35);
+            backdrop-filter: blur(26px) saturate(1.35);
+    border: 1px solid var(--glass-edge);
+    box-shadow:
+      inset 0 2px 1px var(--glass-edge),
+      inset 0 -18px 40px rgba(255, 255, 255, 0.12),
+      0 40px 70px -30px var(--shadow);
+  }
+  .center {
+    inset: 0;
+    background: radial-gradient(circle closest-side, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.25) 30%, transparent 60%);
+    mix-blend-mode: soft-light;
+  }
+  .clock svg { position: absolute; inset: -14%; width: 128%; height: 128%; overflow: visible; }
+
+  .card {
+    width: 100%; max-width: 460px;
+    padding: 1.4rem 1.4rem 1.5rem;
+    border-radius: 28px;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+            backdrop-filter: blur(24px) saturate(1.3);
+    border: 1px solid var(--glass-edge);
+    box-shadow: inset 0 1px 1px var(--glass-edge), 0 24px 50px -28px var(--shadow);
+  }
+  .readout { text-align: center; }
+  .time { margin: 0; font-size: 2.2rem; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .time small { font-size: 0.5em; font-weight: 400; color: var(--ink-soft); margin-left: 0.2em; }
+  .status { margin: 0.15rem 0 0; font-size: 0.88rem; color: var(--ink-soft); min-height: 1.3em; }
+
+  .swatches { display: flex; justify-content: center; gap: 10px; margin: 1.3rem 0 0.2rem; }
+  .swatch { appearance: none; border: 0; padding: 0; background: none; cursor: pointer; font: inherit; color: var(--ink-soft); text-align: center; }
+  .swatch .chip {
+    display: block; width: 50px; height: 50px; border-radius: 50%;
+    box-shadow: inset 0 2px 2px rgba(255,255,255,0.8), inset 0 -3px 6px rgba(0,0,0,0.04), 0 6px 14px -6px var(--shadow);
+    border: 1px solid var(--glass-edge);
+  }
+  .swatch .hex { display: block; font-size: 0.7rem; margin-top: 0.35rem; font-variant-numeric: tabular-nums; }
+  .swatch:hover .hex { color: var(--ink); }
+  .copy-note { text-align: center; font-size: 0.8rem; color: var(--ink-soft); margin: 0.2rem 0 1.4rem; min-height: 1.2em; }
+
+  .controls { display: grid; gap: 1.1rem; }
+  fieldset { border: 0; margin: 0; padding: 0; }
+  legend { font-size: 0.85rem; color: var(--ink-soft); padding: 0; margin-bottom: 0.4rem; }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); }
+  .seg button, .actions button {
+    appearance: none; font: inherit; font-size: 0.85rem; color: var(--ink);
+    background: transparent; border: 0; border-radius: 999px;
+    padding: 0.5rem 0.4rem; cursor: pointer; line-height: 1.15;
+  }
+  .seg button[aria-pressed="true"] { background: var(--pressed); font-weight: 600; box-shadow: 0 2px 8px -3px var(--shadow); }
+  .hint { font-size: 0.8rem; color: var(--ink-soft); margin: 0.45rem 0 0; }
+  .actions { display: flex; gap: 6px; margin-top: 0.5rem; }
+  .actions button { flex: 1; border: 1px solid var(--line); background: var(--glass); }
+  .actions button:disabled { opacity: 0.35; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* clean view: just the clock */
+  .clean-btn { width: 100%; margin-top: 1.2rem; appearance: none; font: inherit; font-size: 0.9rem; color: var(--ink);
+    background: var(--pressed); border: 1px solid var(--line); border-radius: 999px; padding: 0.65rem; cursor: pointer; }
+  .show-btn {
+    position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 5;
+    appearance: none; font: inherit; font-size: 0.85rem; color: var(--ink);
+    padding: 0.55rem 1rem; border-radius: 999px; cursor: pointer;
+    background: var(--glass); border: 1px solid var(--glass-edge);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    box-shadow: 0 10px 30px -14px var(--shadow);
+    opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
+    display: none;
+  }
+  body.clean .show-btn { display: block; }
+  body.clean .show-btn.visible, body.clean .show-btn:focus-visible { opacity: 1; pointer-events: auto; }
+  body.clean { cursor: none; }
+  body.clean.pointer-active { cursor: default; }
+  body.clean .card { display: none; }
+  body.clean main { min-height: 100vh; justify-content: center; padding: 0 1rem; }
+  body.clean .clock { width: min(70vmin, 720px); margin: 0; }
+  @media (prefers-reduced-motion: reduce) { .show-btn { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wash" aria-hidden="true"></div>
+<main>
+  <div class="clock" role="img" aria-label="Clock drawn as a frosted pastel color wheel">
+    <div class="halo" id="halo"></div>
+    <div class="disc" id="disc"></div>
+    <div class="glass"></div>
+    <div class="center"></div>
+    <svg viewBox="-64 -64 528 528" aria-hidden="true">
+      <defs>
+        <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#3c3f5a" flood-opacity="0.18"/>
+        </filter>
+      </defs>
+      <line id="minuteHand" stroke="var(--hand)" stroke-width="3" stroke-linecap="round" filter="url(#soft)"/>
+      <line id="hourHand" stroke="var(--hand)" stroke-width="3.5" stroke-linecap="round" filter="url(#soft)"/>
+      <circle id="hourKnob" r="14" fill="rgba(255,255,255,0.72)" stroke="rgba(255,255,255,0.95)" stroke-width="1.5" filter="url(#soft)"/>
+    </svg>
+  </div>
+
+  <section class="card" aria-label="Clock and palette controls">
+    <div class="readout">
+      <p class="time" id="time">--:--</p>
+      <p class="status" id="status">Live</p>
+    </div>
+    <div class="swatches" id="swatches"></div>
+    <p class="copy-note" id="copyNote">Tap a color to copy its hex code.</p>
+
+    <div class="controls">
+      <fieldset>
+        <legend>Palette</legend>
+        <div class="seg" id="modeSeg">
+          <button type="button" data-mode="sky" aria-pressed="true">Sky</button>
+          <button type="button" data-mode="duo" aria-pressed="false">Two-tone</button>
+          <button type="button" data-mode="spectrum" aria-pressed="false">Full spectrum</button>
+        </div>
+        <p class="hint" id="modeHint"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Speed</legend>
+        <div class="seg" id="speedSeg">
+          <button type="button" data-speed="1" aria-pressed="true">Real time</button>
+          <button type="button" data-speed="60" aria-pressed="false">1 min/s</button>
+          <button type="button" data-speed="600" aria-pressed="false">10 min/s</button>
+          <button type="button" data-speed="3600" aria-pressed="false">1 hr/s</button>
+        </div>
+        <div class="actions">
+          <button type="button" id="pauseBtn" disabled>Pause</button>
+          <button type="button" id="nowBtn" disabled>Back to now</button>
+        </div>
+      </fieldset>
+    </div>
+    <button type="button" class="clean-btn" id="cleanBtn">Hide controls</button>
+  </section>
+</main>
+<button type="button" class="show-btn" id="showBtn">Show controls</button>
+
+<script>
+(() => {
+  // ---- OKLCH -> sRGB hex, gamut mapped by lowering chroma ----
+  function oklchToRgb(L, C, h) {
+    const hr = h * Math.PI / 180, a = C * Math.cos(hr), b = C * Math.sin(hr);
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+    return [4.0767416621*l - 3.3077115913*m + 0.2309699292*s,
+           -1.2684380046*l + 2.6097574011*m - 0.3413193965*s,
+           -0.0041960863*l - 0.7034186147*m + 1.7076147010*s];
+  }
+  const cache = new Map();
+  function oklchHex(L, C, h) {
+    h = ((h % 360) + 360) % 360;
+    const k = L + "|" + C + "|" + h.toFixed(1);
+    if (cache.has(k)) return cache.get(k);
+    let rgb = oklchToRgb(L, C, h);
+    while (!rgb.every(v => v >= -0.0005 && v <= 1.0005) && C > 0) { C = Math.max(0, C - 0.003); rgb = oklchToRgb(L, C, h); }
+    const hex = "#" + rgb.map(v => {
+      v = Math.min(1, Math.max(0, v));
+      v = v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+      return Math.round(v * 255).toString(16).padStart(2, "0");
+    }).join("");
+    if (cache.size > 5000) cache.clear();
+    cache.set(k, hex);
+    return hex;
+  }
+
+  // Every color is drawn at the same high lightness and gentle chroma, so it always stays pastel
+  const L = 0.915, C = 0.07;
+  const pastel = h => oklchHex(L, C, h);
+  const HUE_OFFSET = 125;               // 12 o'clock is a fresh green
+  const handHue = angle => angle + HUE_OFFSET;
+  const ease = t => t * t * (3 - 2 * t);
+
+  // ---- Sky colors through the day ----
+  // Each keyframe: [hour, name, [sun glow, horizon, mid sky, upper sky]] as OKLCH [L, C, h]
+  const SKY = [
+    [0,    "Night",        [[0.76,0.05,290],[0.72,0.06,280],[0.68,0.07,272],[0.64,0.07,265]]],
+    [4.5,  "Before dawn",  [[0.80,0.06,310],[0.76,0.07,292],[0.72,0.07,275],[0.68,0.07,264]]],
+    [6,    "Dawn",         [[0.88,0.09,55], [0.86,0.08,10], [0.83,0.06,305],[0.79,0.07,268]]],
+    [7.5,  "Sunrise",      [[0.93,0.10,85], [0.90,0.08,45], [0.88,0.05,355],[0.86,0.07,245]]],
+    [10,   "Morning",      [[0.96,0.05,95], [0.93,0.04,210],[0.89,0.07,232],[0.85,0.09,242]]],
+    [13,   "Midday",       [[0.97,0.02,200],[0.93,0.05,218],[0.88,0.08,232],[0.83,0.10,248]]],
+    [16,   "Afternoon",    [[0.95,0.07,85], [0.92,0.04,205],[0.88,0.07,232],[0.84,0.09,248]]],
+    [18,   "Golden hour",  [[0.91,0.11,72], [0.89,0.09,48], [0.87,0.06,12], [0.83,0.07,285]]],
+    [19.5, "Sunset",       [[0.86,0.11,42], [0.84,0.10,8],  [0.81,0.08,325],[0.75,0.08,288]]],
+    [21,   "Dusk",         [[0.81,0.08,345],[0.77,0.08,305],[0.72,0.08,282],[0.67,0.08,268]]],
+    [24,   "Night",        [[0.76,0.05,290],[0.72,0.06,280],[0.68,0.07,272],[0.64,0.07,265]]]
+  ];
+  const toLab = ([L, C, h]) => [L, C * Math.cos(h * Math.PI / 180), C * Math.sin(h * Math.PI / 180)];
+  const mixLab = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+  function labHex([L, a, b]) {
+    let C = Math.hypot(a, b), h = Math.atan2(b, a) * 180 / Math.PI;
+    C = Math.min(C, 0.11);                  // keep it pastel
+    L = Math.max(0.64, Math.min(0.97, L));
+    return oklchHex(Math.round(L * 1000) / 1000, Math.round(C * 1000) / 1000, h);
+  }
+  // Returns the four sky colors (in OKLab) and a name for the given hour of day
+  function skyAt(hourOfDay) {
+    let i = 0;
+    while (i < SKY.length - 2 && SKY[i + 1][0] <= hourOfDay) i++;
+    const [h0, n0, c0] = SKY[i], [h1, n1, c1] = SKY[i + 1];
+    const t = ease((hourOfDay - h0) / (h1 - h0));
+    return { name: t < 0.5 ? n0 : n1, cols: c0.map((c, k) => mixLab(toLab(c), toLab(c1[k]), t)) };
+  }
+  // Position 0..1 along the four sky colors
+  function skyColorAt(cols, t) {
+    const x = Math.min(0.9999, Math.max(0, t)) * (cols.length - 1);
+    const k = Math.floor(x);
+    return mixLab(cols[k], cols[k + 1], ease(x - k));
+  }
+  let sky = skyAt(12);
+
+  let mode = "sky", speed = 1, live = true, paused = false;
+  let simTime = Date.now(), lastFrame = performance.now();
+
+  const hints = {
+    sky: "Takes its colors from the sky at this time of day. The glow sits at the hour hand and the upper sky at the minute hand.",
+    duo: "Blends between the hour hand's color and the minute hand's color, then flows back around.",
+    spectrum: "Travels all the way around the rainbow, passing through each hand's color on the way."
+  };
+
+  // Hue at any point on the disc (p = degrees clockwise from 12). Always continuous, so no seams.
+  function hueAtPos(p, hA, mA) {
+    const h1 = handHue(hA), h2 = handHue(mA);
+    const d = ((h2 - h1 + 540) % 360) - 180;       // short hue path between the hand colors
+    let S = (mA - hA + 360) % 360;                 // spatial arc from hour to minute hand
+    if (S < 0.5) S = 0.5;
+    const rel = (p - hA + 360) % 360;
+    if (mode === "duo") {
+      const t = rel <= S ? rel / S : 1 - (rel - S) / (360 - S);
+      return h1 + d * ease(t);
+    }
+    const dir = d >= 0 ? 1 : -1;
+    const back = dir * 360 - d;
+    return rel <= S ? h1 + d * ease(rel / S) : h2 + back * ease((rel - S) / (360 - S));
+  }
+
+  // Sky: hour hand = glow, clockwise to the minute hand = upper sky, then back around to the glow
+  function skyT(p, hA, mA) {
+    let S = (mA - hA + 360) % 360;
+    if (S < 0.5) S = 0.5;
+    const rel = (p - hA + 360) % 360;
+    return rel <= S ? rel / S : 1 - (rel - S) / (360 - S);
+  }
+
+  function gradientStops(hA, mA) {
+    const stops = [];
+    if (mode === "sky") {
+      for (let p = 0; p <= 360; p += 5) stops.push(`${labHex(skyColorAt(sky.cols, skyT(p, hA, mA)))} ${p}deg`);
+      return `conic-gradient(from 0deg, ${stops.join(",")})`;
+    }
+    for (let p = 0; p <= 360; p += 5) stops.push(`${pastel(hueAtPos(p, hA, mA))} ${p}deg`);
+    return `conic-gradient(from 0deg, ${stops.join(",")})`;
+  }
+
+  function palette(hA, mA) {
+    let S = (mA - hA + 360) % 360;
+    if (mode === "sky") return [0, 1, 2, 3, 4].map(i => labHex(skyColorAt(sky.cols, i / 4)));
+    if (mode === "duo") {
+      if (S < 0.5) S = 0.5;
+      return [0, 1, 2, 3, 4].map(i => pastel(hueAtPos(hA + S * i / 4, hA, mA)));
+    }
+    return [0, 1, 2, 3, 4].map(i => pastel(hueAtPos(hA + 72 * i, hA, mA)));
+  }
+
+  const $ = id => document.getElementById(id);
+  const disc = $("disc"), halo = $("halo");
+  const hourHand = $("hourHand"), minuteHand = $("minuteHand"), hourKnob = $("hourKnob");
+  const timeEl = $("time"), statusEl = $("status"), pauseBtn = $("pauseBtn"), nowBtn = $("nowBtn");
+  const root = document.documentElement;
+
+  const R = 200;
+  const pt = (a, r) => [200 + r * Math.sin(a * Math.PI / 180), 200 - r * Math.cos(a * Math.PI / 180)];
+  function setLine(el, a, r0, r1) {
+    const [x1, y1] = pt(a, r0), [x2, y2] = pt(a, r1);
+    el.setAttribute("x1", x1); el.setAttribute("y1", y1);
+    el.setAttribute("x2", x2); el.setAttribute("y2", y2);
+  }
+
+  const swatchWrap = $("swatches"), swatches = [];
+  for (let i = 0; i < 5; i++) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "swatch";
+    b.innerHTML = '<span class="chip"></span><span class="hex"></span>';
+    b.addEventListener("click", () => copyHex(b.dataset.hex));
+    swatchWrap.appendChild(b); swatches.push(b);
+  }
+  const copyNote = $("copyNote"); let noteTimer;
+  async function copyHex(hex) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(hex); ok = true; } catch (e) {
+      try {
+        const ta = document.createElement("textarea"); ta.value = hex;
+        document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove();
+      } catch (e2) {}
+    }
+    copyNote.textContent = ok ? `Copied ${hex}` : `Copy blocked here. The code is ${hex}.`;
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => copyNote.textContent = "Tap a color to copy its hex code.", 2200);
+  }
+
+  let lastGrad = "", lastKey = "", lastTxt = "", lastSky = "";
+  function frame(now) {
+    const dt = now - lastFrame; lastFrame = now;
+    if (live) simTime = Date.now(); else if (!paused) simTime += dt * speed;
+
+    const d = new Date(simTime);
+    const s = d.getSeconds() + d.getMilliseconds() / 1000;
+    const m = d.getMinutes() + s / 60;
+    const h = (d.getHours() % 12) + m / 60;
+    const hA = h * 30, mA = m * 6;
+    sky = skyAt(d.getHours() + m / 60);
+    if (sky.name !== lastSky) { lastSky = sky.name; updateStatus(); }
+
+    setLine(hourHand, hA, R * 0.58, R * 1.14);
+    const [kx, ky] = pt(hA, R);
+    hourKnob.setAttribute("cx", kx); hourKnob.setAttribute("cy", ky);
+    setLine(minuteHand, mA, R * 0.39, R * 1.14);
+
+    const grad = gradientStops(hA, mA);
+    if (grad !== lastGrad) { lastGrad = grad; disc.style.background = grad; halo.style.background = grad; }
+
+    const cols = palette(hA, mA);
+    const key = cols.join("");
+    if (key !== lastKey) {
+      lastKey = key;
+      cols.forEach((c, i) => {
+        const b = swatches[i];
+        b.dataset.hex = c;
+        b.querySelector(".chip").style.background = c;
+        b.querySelector(".hex").textContent = c;
+        b.setAttribute("aria-label", `Copy ${c}`);
+        root.style.setProperty(`--c${i + 1}`, c);
+      });
+    }
+
+    const txt = `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, "0")}<small>${d.getHours() < 12 ? "am" : "pm"}</small>`;
+    if (txt !== lastTxt) { lastTxt = txt; timeEl.innerHTML = txt; }
+    requestAnimationFrame(frame);
+  }
+
+  function updateStatus() {
+    const label = { 60: "1 minute", 600: "10 minutes", 3600: "1 hour" }[speed];
+    const state = live ? "Live" : paused ? "Preview paused" : `Previewing: ${label} every second`;
+    statusEl.textContent = `${sky.name}. ${state}`;
+    pauseBtn.disabled = live; nowBtn.disabled = live;
+    pauseBtn.textContent = paused ? "Play" : "Pause";
+  }
+  const pressIn = (seg, btn) => seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+
+  const speedSeg = $("speedSeg");
+  speedSeg.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    speed = Number(b.dataset.speed);
+    if (speed === 1) { live = true; paused = false; } else if (live) { live = false; simTime = Date.now(); }
+    pressIn(speedSeg, b); updateStatus();
+  });
+  pauseBtn.addEventListener("click", () => { paused = !paused; updateStatus(); });
+  nowBtn.addEventListener("click", () => {
+    live = true; paused = false; speed = 1;
+    pressIn(speedSeg, speedSeg.querySelector('[data-speed="1"]')); updateStatus();
+  });
+
+  const modeSeg = $("modeSeg"), modeHint = $("modeHint");
+  modeSeg.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    mode = b.dataset.mode; modeHint.textContent = hints[mode]; pressIn(modeSeg, b);
+  });
+  modeHint.textContent = hints[mode];
+
+  // ---- clean view ----
+  const cleanBtn = $("cleanBtn"), showBtn = $("showBtn");
+  let hideTimer;
+  function setClean(on) {
+    document.body.classList.toggle("clean", on);
+    try { localStorage.setItem("clockClean", on ? "1" : "0"); } catch (e) {}
+    if (!on) { showBtn.classList.remove("visible"); document.body.classList.remove("pointer-active"); cleanBtn.focus(); }
+    else { hint(); }
+  }
+  function hint() {
+    if (!document.body.classList.contains("clean")) return;
+    showBtn.classList.add("visible");
+    document.body.classList.add("pointer-active");
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      showBtn.classList.remove("visible");
+      document.body.classList.remove("pointer-active");
+    }, 2200);
+  }
+  cleanBtn.addEventListener("click", () => setClean(true));
+  showBtn.addEventListener("click", () => setClean(false));
+  ["mousemove", "pointerdown", "touchstart"].forEach(ev => window.addEventListener(ev, hint, { passive: true }));
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape" && document.body.classList.contains("clean")) setClean(false);
+    else hint();
+  });
+  try { if (localStorage.getItem("clockClean") === "1") setClean(true); } catch (e) {}
+
+  updateStatus();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
